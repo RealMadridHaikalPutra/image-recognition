@@ -5,6 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cari Produk Serupa</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* ── Camera / File source buttons ── */
+        .upload-source-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .upload-source-btn {
+            flex: 1;
+            min-width: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border: 1.5px solid var(--gray-100);
+            border-radius: var(--radius-md);
+            background: var(--white);
+            font-family: var(--font-body);
+            font-size: 0.83rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+        .upload-source-btn:hover, .upload-source-btn.active {
+            border-color: var(--blue);
+            background: var(--blue-pale);
+            color: var(--blue-dark);
+        }
+        .upload-source-btn svg { flex-shrink: 0; }
+    </style>
 </head>
 <body>
 
@@ -33,7 +66,7 @@
                 <div>
                     <div class="page-header">
                         <h2>Cari Produk Serupa</h2>
-                        <p>Upload gambar produk untuk menemukan produk yang paling mirip.</p>
+                        <p>Upload gambar produk — atau gunakan kamera — untuk menemukan produk yang paling mirip.</p>
                     </div>
 
                     {% if error %}
@@ -45,6 +78,29 @@
                     <!-- Search Form -->
                     <div class="form-card">
                         <form action="{{ url_for('search') }}" method="POST" enctype="multipart/form-data" id="searchForm">
+
+                            <!-- Camera / File source selector -->
+                            <div class="upload-source-row" id="searchSourceRow">
+                                <button type="button" class="upload-source-btn active" id="btnFile"
+                                        onclick="setSearchSource('file')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                    Pilih File
+                                </button>
+                                <button type="button" class="upload-source-btn" id="btnCamera"
+                                        onclick="setSearchSource('camera')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2">
+                                        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                                        <circle cx="12" cy="13" r="4"/>
+                                    </svg>
+                                    Kamera
+                                </button>
+                            </div>
 
                             <div class="form-group">
                                 <label for="query_image">Gambar Pencarian <span class="required">*</span></label>
@@ -59,7 +115,7 @@
                                                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                                             </svg>
                                         </div>
-                                        <span class="text">Klik untuk memilih gambar</span>
+                                        <span class="text" id="searchLabelText">Klik untuk memilih gambar</span>
                                         <span class="hint">PNG, JPG, GIF &mdash; maksimal 10 MB</span>
                                     </div>
                                 </div>
@@ -176,7 +232,7 @@
                     <div class="info-box">
                         <h3>Cara Kerja</h3>
                         <ol>
-                            <li><strong>Upload:</strong> Pilih gambar produk yang ingin dicari</li>
+                            <li><strong>Upload / Kamera:</strong> Pilih gambar atau foto langsung</li>
                             <li><strong>Proses:</strong> Sistem mengekstrak fitur gambar (embedding)</li>
                             <li><strong>Cari:</strong> FAISS mencari vektor yang paling mirip</li>
                             <li><strong>Agregasi:</strong> Hasil dikelompokkan per ID produk</li>
@@ -204,7 +260,7 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
-        /* ---- Nav toggle ---- */
+        /* ── Nav toggle ── */
         const toggle = document.getElementById('navToggle');
         const links  = document.getElementById('navLinks');
         toggle.addEventListener('click', () => links.classList.toggle('open'));
@@ -212,11 +268,37 @@
             if (!toggle.contains(e.target) && !links.contains(e.target)) links.classList.remove('open');
         });
 
-        /* ---- Image preview ---- */
+        /* ── Camera / File source toggle ── */
+        function setSearchSource(type) {
+            const input      = document.getElementById('query_image');
+            const btnFile    = document.getElementById('btnFile');
+            const btnCamera  = document.getElementById('btnCamera');
+            const labelText  = document.getElementById('searchLabelText');
+
+            if (type === 'camera') {
+                input.removeAttribute('multiple');
+                input.setAttribute('capture', 'environment');
+                input.setAttribute('accept', 'image/*');
+                btnCamera.classList.add('active');
+                btnFile.classList.remove('active');
+                labelText.textContent = 'Klik untuk membuka kamera';
+            } else {
+                input.removeAttribute('capture');
+                input.setAttribute('accept', 'image/jpeg,image/jpg,image/png,image/gif');
+                btnFile.classList.add('active');
+                btnCamera.classList.remove('active');
+                labelText.textContent = 'Klik untuk memilih gambar';
+            }
+            // Reset
+            input.value = '';
+            document.getElementById('query-preview').innerHTML = '';
+        }
+
+        /* ── Image preview ── */
         function previewQueryImage(event) {
-            const file = event.target.files[0];
+            const file    = event.target.files[0];
             const preview = document.getElementById('query-preview');
-            const label = document.getElementById('searchFileLabel');
+            const label   = document.getElementById('searchFileLabel');
             if (file) {
                 const reader = new FileReader();
                 reader.onload = e => {
@@ -235,14 +317,14 @@
             }
         }
 
-        /* ---- Submit state ---- */
+        /* ── Submit state ── */
         document.getElementById('searchForm').addEventListener('submit', function() {
             const btn = document.getElementById('searchBtn');
             btn.textContent = 'Sedang mencari...';
             btn.disabled = true;
         });
 
-        /* ---- Animate progress bars on load ---- */
+        /* ── Animate progress bars on load ── */
         window.addEventListener('load', () => {
             const fills = document.querySelectorAll('.progress-fill');
             fills.forEach(f => {

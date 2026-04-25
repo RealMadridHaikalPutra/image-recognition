@@ -6,10 +6,11 @@
     <title>Upload Gambar Produk</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
+        /* ── Existing images gallery ── */
         .existing-section {
             display: none;
             margin-top: 20px;
-            padding: 18px 20px;
+            padding: 20px;
             background: #FFFBF0;
             border: 1.5px solid #FDE68A;
             border-radius: var(--radius-lg);
@@ -19,7 +20,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
         }
         .existing-header h4 {
             font-size: 0.9rem;
@@ -39,32 +40,42 @@
         .existing-notice {
             font-size: 0.82rem;
             color: #92400E;
-            margin-bottom: 12px;
+            margin-bottom: 14px;
             line-height: 1.5;
         }
         .existing-grid {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 10px;
         }
+
+        /* ── Real thumbnail with delete ── */
         .existing-thumb {
-            width: 72px;
-            height: 72px;
+            position: relative;
+            width: 88px;
+            height: 88px;
             border-radius: var(--radius-md);
-            overflow: hidden;
+            overflow: visible;
             border: 1.5px solid #FDE68A;
             background: #FEF3C7;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 3px;
             flex-shrink: 0;
         }
         .existing-thumb img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            border-radius: calc(var(--radius-md) - 1px);
+            display: block;
+        }
+        .existing-thumb .thumb-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            border-radius: calc(var(--radius-md) - 1px);
         }
         .existing-thumb .thumb-label {
             font-size: 0.6rem;
@@ -74,20 +85,31 @@
             text-align: center;
             padding: 0 2px;
         }
-        .thumb-more {
-            width: 72px;
-            height: 72px;
-            border-radius: var(--radius-md);
-            background: #FEF3C7;
-            border: 1.5px dashed #FCD34D;
+        .btn-delete-img {
+            position: absolute;
+            top: -7px;
+            right: -7px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--red);
+            color: #fff;
+            border: 2px solid #fff;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.8rem;
+            font-size: 11px;
             font-weight: 700;
-            color: #92400E;
+            line-height: 1;
+            box-shadow: 0 2px 6px rgba(220,38,38,0.3);
+            transition: transform var(--transition), background var(--transition);
+            z-index: 5;
         }
+        .btn-delete-img:hover { transform: scale(1.15); background: #b91c1c; }
+        .existing-thumb.deleting { opacity: 0.4; pointer-events: none; }
 
+        /* ── Product status ── */
         .product-status {
             display: none;
             align-items: center;
@@ -113,6 +135,7 @@
         }
         .re-embed-tag.show { display: flex; }
 
+        /* ── Progress overlay ── */
         .progress-overlay {
             display: none;
             position: fixed;
@@ -151,10 +174,66 @@
         }
         .step-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gray-300); flex-shrink: 0; }
         .step-dot.active { background: var(--blue); }
+
+        /* ── Camera / file source buttons ── */
+        .upload-source-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .upload-source-btn {
+            flex: 1;
+            min-width: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border: 1.5px solid var(--gray-100);
+            border-radius: var(--radius-md);
+            background: var(--white);
+            font-family: var(--font-body);
+            font-size: 0.83rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+        .upload-source-btn:hover, .upload-source-btn.active {
+            border-color: var(--blue);
+            background: var(--blue-pale);
+            color: var(--blue-dark);
+        }
+        .upload-source-btn svg { flex-shrink: 0; }
+
+        /* ── Delete confirm toast ── */
+        .delete-toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--black);
+            color: var(--white);
+            padding: 12px 20px;
+            border-radius: var(--radius-lg);
+            font-size: 0.85rem;
+            font-weight: 500;
+            z-index: 400;
+            transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.3s;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .delete-toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
     </style>
 </head>
 <body>
 
+    <!-- Progress overlay -->
     <div class="progress-overlay" id="progressOverlay">
         <div class="progress-card">
             <div class="progress-spinner"></div>
@@ -177,6 +256,9 @@
         </div>
     </div>
 
+    <!-- Delete confirm toast -->
+    <div class="delete-toast" id="deleteToast"></div>
+
     <nav class="navbar">
         <div class="container">
             <div class="nav-brand"><h1>Product<span>Search</span></h1></div>
@@ -197,7 +279,7 @@
                 <div>
                     <div class="page-header">
                         <h2>Upload Gambar Produk</h2>
-                        <p>Cari produk dari Inventree, lalu upload gambar. Jika produk sudah ada, gambar baru akan ditambahkan dan semua gambar di-embed ulang otomatis.</p>
+                        <p>Cari produk dari Inventree, lalu upload gambar. Jika produk sudah ada, gambar lama bisa dihapus dan semua gambar akan di-embed ulang otomatis saat submit.</p>
                     </div>
 
                     {% if error %}
@@ -213,6 +295,10 @@
                               enctype="multipart/form-data" id="uploadForm">
 
                             <input type="hidden" id="item_id" name="item_id" value="">
+                            <!-- always re-embed when existing product -->
+                            <input type="hidden" id="upload_mode" name="upload_mode" value="new">
+                            <!-- comma-separated image IDs to delete before embedding -->
+                            <input type="hidden" id="delete_image_ids" name="delete_image_ids" value="">
 
                             <!-- Product Search -->
                             <div class="form-group" style="position:relative;">
@@ -253,19 +339,19 @@
                                         <path d="M3 22v-6h6"/>
                                         <path d="M21 12a9 9 0 01-15 6.7L3 16"/>
                                     </svg>
-                                    Gambar lama + baru akan di-embed ulang otomatis
+                                    Semua gambar (lama + baru) akan di-embed ulang otomatis saat submit
                                 </div>
                             </div>
 
-                            <!-- Existing images -->
+                            <!-- Existing images gallery with delete -->
                             <div class="existing-section" id="existingSection">
                                 <div class="existing-header">
-                                    <h4>Gambar yang sudah ada di database</h4>
+                                    <h4>Gambar yang sudah ada</h4>
                                     <span class="existing-badge" id="existingBadge">0 gambar</span>
                                 </div>
                                 <p class="existing-notice">
-                                    Berikut gambar yang sudah tersimpan untuk produk ini sebagai bahan pertimbangan.
-                                    Upload gambar baru untuk melengkapi sudut yang belum ada — semua gambar akan di-embed ulang bersama-sama.
+                                    Klik <strong>✕</strong> pada gambar untuk menghapusnya sebelum submit.
+                                    Penghapusan dilakukan bersamaan saat kamu klik <em>Upload &amp; Re-embed</em>.
                                 </p>
                                 <div class="existing-grid" id="existingGrid"></div>
                             </div>
@@ -276,9 +362,33 @@
                                 <p id="uploadHint">Pilih minimal 4 gambar dari berbagai sudut</p>
                             </div>
 
+                            <!-- Camera / File source selector -->
+                            <div class="upload-source-row" id="uploadSourceRow">
+                                <button type="button" class="upload-source-btn active" id="btnFile"
+                                        onclick="setSource('file')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                    Pilih File
+                                </button>
+                                <button type="button" class="upload-source-btn" id="btnCamera"
+                                        onclick="setSource('camera')">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                         stroke="currentColor" stroke-width="2">
+                                        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                                        <circle cx="12" cy="13" r="4"/>
+                                    </svg>
+                                    Kamera
+                                </button>
+                            </div>
+
                             <div class="form-group">
                                 <label for="product-images">Gambar Produk <span class="required">*</span></label>
                                 <div class="file-input-wrapper">
+                                    <!-- Hidden actual input -->
                                     <input type="file" id="product-images" name="product-images"
                                            accept="image/jpeg,image/jpg,image/png,image/gif"
                                            multiple required onchange="updateImageCount()">
@@ -291,7 +401,7 @@
                                                 <line x1="12" y1="3" x2="12" y2="15"/>
                                             </svg>
                                         </div>
-                                        <span class="text">Klik untuk memilih gambar</span>
+                                        <span class="text" id="fileLabelText">Klik untuk memilih gambar</span>
                                         <span class="hint">PNG, JPG, GIF &mdash; maks. 10 MB per file</span>
                                     </div>
                                 </div>
@@ -312,18 +422,18 @@
                         <h3>Cara Kerja</h3>
                         <ol>
                             <li><strong>Cari produk</strong> dari Inventree</li>
-                            <li><strong>Lihat gambar</strong> yang sudah ada sebagai referensi</li>
-                            <li><strong>Upload gambar baru</strong> dari sudut yang belum ada</li>
-                            <li>Sistem otomatis <strong>re-embed semua gambar</strong> (lama + baru)</li>
+                            <li><strong>Hapus gambar</strong> yang salah (jika perlu)</li>
+                            <li><strong>Upload gambar baru</strong> dari kamera atau file</li>
+                            <li>Klik submit — sistem <strong>re-embed semua gambar</strong> (sisa + baru)</li>
                         </ol>
                     </div>
 
                     <div class="info-box info-technical">
                         <h3>Tentang Re-Embedding</h3>
                         <ul>
-                            <li>Setiap kali gambar baru ditambahkan, <strong>semua gambar produk</strong> di-embed ulang bersama-sama</li>
-                            <li>Representasi vector lebih kaya dan pencarian lebih akurat</li>
-                            <li>Proses lebih lama tapi kualitas hasil lebih tinggi</li>
+                            <li>Setiap kali ada perubahan gambar, <strong>semua gambar produk</strong> di-embed ulang bersama</li>
+                            <li>Gambar yang kamu hapus akan <strong>dihapus permanen</strong> dari database</li>
+                            <li>Kamera langsung tersedia untuk perangkat mobile</li>
                         </ul>
                     </div>
 
@@ -348,6 +458,7 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
+    /* ── Nav toggle ── */
     const toggle = document.getElementById('navToggle');
     const links  = document.getElementById('navLinks');
     toggle.addEventListener('click', () => links.classList.toggle('open'));
@@ -355,14 +466,28 @@
         if (!toggle.contains(e.target) && !links.contains(e.target)) links.classList.remove('open');
     });
 
+    /* ═══════════════════════════════════════════════════════════
+       STATE
+    ═══════════════════════════════════════════════════════════ */
     let isExistingProduct = false;
     let searchTimeout;
+    // {id, angle, file_path, imageUrl} of existing images still to keep
+    let existingImages = [];
+    // Set of image IDs marked for deletion
+    let toDeleteIds = new Set();
 
-    /* ── Product search ── */
+    /* ═══════════════════════════════════════════════════════════
+       PRODUCT SEARCH
+    ═══════════════════════════════════════════════════════════ */
     function searchProducts() {
+        // If a product is already selected, do nothing — block any dropdown
+        if (document.getElementById('item_id').value) {
+            document.getElementById('search-results').style.display = 'none';
+            return;
+        }
         const query = document.getElementById('product-search').value.trim();
-        const list  = document.getElementById('results-list');
         const box   = document.getElementById('search-results');
+        const list  = document.getElementById('results-list');
         clearTimeout(searchTimeout);
         if (query.length < 2) { box.style.display = 'none'; return; }
         searchTimeout = setTimeout(() => {
@@ -397,7 +522,13 @@
     function selectProduct(p) {
         document.getElementById('item_id').value = p.id;
         document.getElementById('search-results').style.display = 'none';
-        document.getElementById('product-search').value = '';
+
+        // Lock the search input so it can't trigger the dropdown again
+        const searchInput = document.getElementById('product-search');
+        searchInput.value = '';
+        searchInput.setAttribute('disabled', '');
+        searchInput.setAttribute('placeholder', 'Produk sudah dipilih');
+
         document.getElementById('selected-product-info').innerHTML = `
             <span class="badge-sku">${p.id}</span>
             <span class="badge-name">${p.name}</span>
@@ -412,9 +543,11 @@
             .then(data => {
                 const exists = data.success && data.data && data.data.image_count > 0;
                 const count  = exists ? data.data.image_count : 0;
-                const images = exists ? (data.data.images || []) : [];
+                const imgs   = exists ? (data.data.images || []) : [];
                 isExistingProduct = exists;
-                updateUI(exists, count, images);
+                existingImages = imgs.map(i => ({ ...i }));
+                toDeleteIds.clear();
+                updateUI(exists, count, imgs);
             })
             .catch(() => { isExistingProduct = false; updateUI(false, 0, []); });
     }
@@ -430,53 +563,160 @@
             textEl.className = 'status-text existing';
             textEl.textContent = `Produk sudah ada — ${count} gambar tersimpan`;
             document.getElementById('reEmbedTag').classList.add('show');
-            document.getElementById('existingBadge').textContent = `${count} gambar`;
-            renderExistingImages(images, count);
+            document.getElementById('upload_mode').value = 're_embed';
+            renderExistingImages(images);
             document.getElementById('existingSection').classList.add('show');
-            document.getElementById('uploadTitle').textContent = 'Tambah Gambar Baru';
+            document.getElementById('uploadTitle').textContent = 'Tambah Gambar Baru (Opsional)';
             document.getElementById('uploadHint').textContent =
-                `Upload gambar baru — akan digabung dengan ${count} gambar yang ada, lalu di-embed ulang semua`;
+                `Upload gambar baru — akan digabung dengan sisa gambar lama, lalu di-embed ulang semua`;
+            document.getElementById('submitBtn').textContent = 'Upload & Re-embed';
             document.getElementById('product-images').removeAttribute('required');
         } else {
             dotEl.className  = 'status-dot new';
             textEl.className = 'status-text new';
             textEl.textContent = 'Produk baru — belum ada di database';
             document.getElementById('reEmbedTag').classList.remove('show');
+            document.getElementById('upload_mode').value = 'new';
             document.getElementById('existingSection').classList.remove('show');
             document.getElementById('uploadTitle').textContent = 'Upload Gambar';
             document.getElementById('uploadHint').textContent = 'Pilih minimal 4 gambar dari berbagai sudut';
+            document.getElementById('submitBtn').textContent = 'Upload Gambar';
             document.getElementById('product-images').setAttribute('required', '');
         }
 
         document.getElementById('images-count').style.display = 'none';
         document.getElementById('image-previews').style.display = 'none';
+        syncDeleteField();
     }
 
-    function renderExistingImages(images, total) {
-        const grid = document.getElementById('existingGrid');
+    /* ═══════════════════════════════════════════════════════════
+       EXISTING IMAGE GALLERY WITH DELETE
+    ═══════════════════════════════════════════════════════════ */
+    function renderExistingImages(images) {
+        const grid  = document.getElementById('existingGrid');
+        const badge = document.getElementById('existingBadge');
         grid.innerHTML = '';
-        images.slice(0, 10).forEach(img => {
+        const total = images.length;
+        badge.textContent = `${total} gambar`;
+
+        images.forEach(img => {
             const wrap = document.createElement('div');
             wrap.className = 'existing-thumb';
+            wrap.dataset.id = img.id;
+
+            // Build image element or placeholder
             const label = (img.angle || '').replace('id_', '#');
-            wrap.innerHTML = `
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                     stroke="#D97706" stroke-width="1.5">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <circle cx="8.5" cy="8.5" r="1.5"/>
-                    <path d="M21 15l-5-5L5 21"/>
-                </svg>
-                <span class="thumb-label">${label}</span>`;
+            const imgUrl = img.file_path
+                ? `/uploads-serve/${encodeURIComponent(img.file_path)}`
+                : null;
+
+            if (imgUrl) {
+                const im = document.createElement('img');
+                im.src = imgUrl;
+                im.alt = label;
+                im.onerror = () => { im.replaceWith(makePlaceholder(label)); };
+                wrap.appendChild(im);
+            } else {
+                wrap.appendChild(makePlaceholder(label));
+            }
+
+            // Delete button
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'btn-delete-img';
+            del.title = `Hapus ${label}`;
+            del.innerHTML = '✕';
+            del.addEventListener('click', () => toggleDeleteImage(img.id, wrap, label));
+            wrap.appendChild(del);
+
             grid.appendChild(wrap);
         });
-        if (total > 10) {
-            const more = document.createElement('div');
-            more.className = 'thumb-more';
-            more.textContent = `+${total - 10}`;
-            grid.appendChild(more);
-        }
     }
 
+    function makePlaceholder(label) {
+        const div = document.createElement('div');
+        div.className = 'thumb-placeholder';
+        div.innerHTML = `
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                 stroke="#D97706" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="M21 15l-5-5L5 21"/>
+            </svg>
+            <span class="thumb-label">${label}</span>`;
+        return div;
+    }
+
+    function toggleDeleteImage(imgId, wrap, label) {
+        if (toDeleteIds.has(imgId)) {
+            // Un-mark
+            toDeleteIds.delete(imgId);
+            wrap.style.opacity = '1';
+            wrap.style.border = '1.5px solid #FDE68A';
+            wrap.querySelector('.btn-delete-img').style.background = 'var(--red)';
+            showToast(`Batal hapus gambar ${label}`);
+        } else {
+            // Mark for delete
+            toDeleteIds.add(imgId);
+            wrap.style.opacity = '0.45';
+            wrap.style.border = '1.5px dashed #EF4444';
+            wrap.querySelector('.btn-delete-img').style.background = '#6B7280';
+            showToast(`Gambar ${label} akan dihapus saat submit`);
+        }
+        syncDeleteField();
+        syncExistingBadge();
+    }
+
+    function syncDeleteField() {
+        document.getElementById('delete_image_ids').value = [...toDeleteIds].join(',');
+    }
+
+    function syncExistingBadge() {
+        const remaining = existingImages.length - toDeleteIds.size;
+        document.getElementById('existingBadge').textContent = `${existingImages.length} gambar (${toDeleteIds.size} akan dihapus)`;
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('deleteToast');
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       CAMERA / FILE SOURCE TOGGLE
+    ═══════════════════════════════════════════════════════════ */
+    function setSource(type) {
+        const input = document.getElementById('product-images');
+        const btnFile   = document.getElementById('btnFile');
+        const btnCamera = document.getElementById('btnCamera');
+        const labelText = document.getElementById('fileLabelText');
+
+        if (type === 'camera') {
+            input.removeAttribute('multiple');
+            input.setAttribute('capture', 'environment');
+            input.setAttribute('accept', 'image/*');
+            btnCamera.classList.add('active');
+            btnFile.classList.remove('active');
+            labelText.textContent = 'Klik untuk membuka kamera';
+        } else {
+            input.setAttribute('multiple', '');
+            input.removeAttribute('capture');
+            input.setAttribute('accept', 'image/jpeg,image/jpg,image/png,image/gif');
+            btnFile.classList.add('active');
+            btnCamera.classList.remove('active');
+            labelText.textContent = 'Klik untuk memilih gambar';
+        }
+        // Reset file
+        input.value = '';
+        document.getElementById('images-count').style.display = 'none';
+        document.getElementById('image-previews').style.display = 'none';
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       CLEAR PRODUCT SELECTION
+    ═══════════════════════════════════════════════════════════ */
     function clearProductSelection() {
         document.getElementById('item_id').value = '';
         document.getElementById('product-search').value = '';
@@ -490,27 +730,36 @@
         document.getElementById('product-images').setAttribute('required', '');
         document.getElementById('images-count').style.display = 'none';
         document.getElementById('image-previews').style.display = 'none';
+        document.getElementById('submitBtn').textContent = 'Upload Gambar';
+        document.getElementById('upload_mode').value = 'new';
+        document.getElementById('delete_image_ids').value = '';
         isExistingProduct = false;
+        existingImages = [];
+        toDeleteIds.clear();
     }
 
+    /* Click outside search closes dropdown */
     document.addEventListener('click', e => {
         const b = document.getElementById('product-search');
         const r = document.getElementById('search-results');
         if (!b.contains(e.target) && !r.contains(e.target)) r.style.display = 'none';
     });
 
-    /* ── File preview ── */
+    /* ═══════════════════════════════════════════════════════════
+       FILE PREVIEW
+    ═══════════════════════════════════════════════════════════ */
     function updateImageCount() {
         const input    = document.getElementById('product-images');
         const count    = input.files.length;
         const countDiv = document.getElementById('images-count');
         const preview  = document.getElementById('image-previews');
-        const minReq   = isExistingProduct ? 1 : 4;
+        const minReq   = isExistingProduct ? 0 : 4;
 
         if (count > 0) {
-            const ok  = count >= minReq;
-            const msg = ok ? `${count} gambar dipilih`
-                           : `${count} gambar — tambahkan ${minReq - count} lagi`;
+            const ok  = isExistingProduct || count >= minReq;
+            const msg = ok
+                ? `${count} gambar dipilih`
+                : `${count} gambar — tambahkan ${minReq - count} lagi`;
             countDiv.innerHTML = `<span class="image-count-badge"
                 style="${ok ? '' : 'background:#FEF9C3;color:#854D0E;border-color:#FDE047;'}">${msg}</span>`;
             countDiv.style.display = 'block';
@@ -539,27 +788,39 @@
         }
     }
 
-    /* ── Submit ── */
+    /* ═══════════════════════════════════════════════════════════
+       FORM SUBMIT
+    ═══════════════════════════════════════════════════════════ */
     document.getElementById('uploadForm').addEventListener('submit', function(e) {
-        const itemId = document.getElementById('item_id').value.trim();
-        const count  = document.getElementById('product-images').files.length;
-        const minReq = isExistingProduct ? 1 : 4;
+        const itemId  = document.getElementById('item_id').value.trim();
+        const count   = document.getElementById('product-images').files.length;
+        const minReq  = isExistingProduct ? 0 : 4;
 
         if (!itemId) {
             e.preventDefault();
             alert('Pilih produk terlebih dahulu.');
             return;
         }
-        if (count < minReq) {
+
+        // For new product still need min 4
+        if (!isExistingProduct && count < minReq) {
             e.preventDefault();
             alert(`Upload minimal ${minReq} gambar. Saat ini ${count} gambar dipilih.`);
+            return;
+        }
+
+        // For existing: need at least new images OR some remaining
+        const remainingExisting = existingImages.length - toDeleteIds.size;
+        if (isExistingProduct && count === 0 && remainingExisting === 0) {
+            e.preventDefault();
+            alert('Tidak bisa menghapus semua gambar tanpa mengupload gambar baru.');
             return;
         }
 
         const overlay = document.getElementById('progressOverlay');
         overlay.classList.add('show');
         document.getElementById('progressTitle').textContent = isExistingProduct
-            ? 'Menambah & Re-Embedding...' : 'Memproses Gambar Baru...';
+            ? 'Re-embedding & Update...' : 'Memproses Gambar Baru...';
         document.getElementById('progressSubtitle').textContent = isExistingProduct
             ? 'Semua gambar produk sedang di-embed ulang'
             : 'Mohon tunggu, jangan tutup halaman ini';

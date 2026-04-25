@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Gambar Produk</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>Product<span>Search</span></h1>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                <li><a href="{{ url_for('upload') }}" class="active">Upload</a></li>
+                <li><a href="{{ url_for('search') }}">Search</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main>
+        <div class="container">
+
+            <div class="page-layout">
+
+                <!-- Main Form -->
+                <div>
+                    <div class="page-header">
+                        <h2>Upload Gambar Produk</h2>
+                        <p>Pilih produk dari Inventree, lalu upload minimal 4 gambar.</p>
+                    </div>
+
+                    {% if error %}
+                    <div class="alert alert-error">
+                        <strong>Gagal:</strong> {{ error }}
+                    </div>
+                    {% endif %}
+
+                    {% if success %}
+                    <div class="alert alert-success">
+                        <strong>Berhasil!</strong> {{ message }}
+                    </div>
+                    {% endif %}
+
+                    <div class="form-card">
+                        <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data" class="upload-form" id="uploadForm">
+
+                            <!-- Product Search -->
+                            <div class="form-group" style="position:relative;">
+                                <label for="product-search">Produk <span class="required">*</span></label>
+                                <input type="text" id="product-search"
+                                       placeholder="Ketik nama atau SKU produk..."
+                                       onkeyup="searchProducts()" autocomplete="off">
+                                <small>Ketik minimal 2 karakter untuk mencari produk dari Inventree</small>
+
+                                <div id="search-results" class="search-results" style="display:none;">
+                                    <div id="results-list"></div>
+                                </div>
+
+                                <div id="product-selected" class="product-selected" style="display:none;">
+                                    <div class="selected-badge">
+                                        <span id="selected-product-info"></span>
+                                        <button type="button" class="btn-remove" onclick="clearProductSelection()" aria-label="Hapus pilihan">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <input type="hidden" id="item_id" name="item_id" value="">
+
+                            <div class="form-divider">
+                                <h3>Upload Gambar</h3>
+                                <p>Pilih 4 gambar atau lebih sekaligus</p>
+                            </div>
+
+                            <!-- File Upload -->
+                            <div class="form-group">
+                                <label for="product-images">Gambar Produk <span class="required">*</span></label>
+                                <div class="file-input-wrapper">
+                                    <input type="file" id="product-images" name="product-images"
+                                           accept="image/jpeg,image/jpg,image/png,image/gif"
+                                           multiple required onchange="updateImageCount()">
+                                    <div class="file-input-label" id="fileLabel">
+                                        <div class="upload-icon">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2">
+                                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                                <polyline points="17 8 12 3 7 8"/>
+                                                <line x1="12" y1="3" x2="12" y2="15"/>
+                                            </svg>
+                                        </div>
+                                        <span class="text">Klik untuk memilih gambar</span>
+                                        <span class="hint">PNG, JPG, GIF &mdash; maksimal 10 MB per file</span>
+                                    </div>
+                                </div>
+                                <div id="images-count" class="images-count" style="display:none;"></div>
+                                <div id="image-previews" class="image-previews-grid" style="margin-top:12px;display:none;"></div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                                Upload Gambar
+                            </button>
+
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Sidebar -->
+                <div class="sidebar">
+                    <div class="info-box">
+                        <h3>Panduan Upload</h3>
+                        <ul>
+                            <li><strong>Cari produk</strong> menggunakan nama atau kode SKU dari Inventree</li>
+                            <li><strong>Minimal 4 gambar</strong> wajib diupload per produk</li>
+                            <li><strong>Format:</strong> JPEG, PNG, atau GIF, maks. 10 MB</li>
+                            <li><strong>Ambil dari berbagai sudut:</strong> depan, belakang, samping, detail</li>
+                        </ul>
+                    </div>
+
+                    <div class="info-box info-technical">
+                        <h3>Detail Teknis</h3>
+                        <ul>
+                            <li>Data produk diambil langsung dari Inventree</li>
+                            <li>Gambar diubah ukuran menjadi 224x224 piksel</li>
+                            <li>Embedding dihasilkan menggunakan neural network</li>
+                            <li>Vektor disimpan di FAISS untuk pencarian cepat</li>
+                        </ul>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Image-Based Product Search &mdash; Powered by Flask + FAISS</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        /* ---- Nav toggle ---- */
+        const toggle = document.getElementById('navToggle');
+        const links  = document.getElementById('navLinks');
+        toggle.addEventListener('click', () => links.classList.toggle('open'));
+        document.addEventListener('click', e => {
+            if (!toggle.contains(e.target) && !links.contains(e.target)) links.classList.remove('open');
+        });
+
+        /* ---- Product search ---- */
+        let searchTimeout;
+
+        function searchProducts() {
+            const query = document.getElementById('product-search').value.trim();
+            const resultsList = document.getElementById('results-list');
+            const searchResults = document.getElementById('search-results');
+            clearTimeout(searchTimeout);
+            if (query.length < 2) { searchResults.style.display = 'none'; return; }
+            searchTimeout = setTimeout(() => {
+                fetch(`/api/search-products?q=${encodeURIComponent(query)}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        resultsList.innerHTML = '';
+                        if (data.success && data.products.length > 0) {
+                            data.products.forEach(p => {
+                                const div = document.createElement('div');
+                                div.className = 'result-item';
+                                div.innerHTML = `
+                                    <div class="result-item-main">
+                                        <strong>${p.id}</strong> &ndash; ${p.name} &ndash; <strong>${p.sku}</strong>
+                                    </div>
+                                    <div class="result-item-sub">${p.category}${p.description ? ' &mdash; ' + p.description : ''}</div>
+                                `;
+                                div.onclick = () => selectProduct(p);
+                                resultsList.appendChild(div);
+                            });
+                        } else {
+                            resultsList.innerHTML = '<div class="no-results">Produk tidak ditemukan</div>';
+                        }
+                        searchResults.style.display = 'block';
+                    })
+                    .catch(err => {
+                        resultsList.innerHTML = `<div class="no-results">Gagal mencari: ${err}</div>`;
+                        searchResults.style.display = 'block';
+                    });
+            }, 300);
+        }
+
+        function selectProduct(p) {
+            document.getElementById('item_id').value = p.id;
+            document.getElementById('search-results').style.display = 'none';
+            document.getElementById('selected-product-info').innerHTML = `
+                <span class="badge-sku">${p.id}</span>
+                <span class="badge-name">${p.name}</span>
+                <span class="badge-sku">${p.sku}</span>
+            `;
+            document.getElementById('product-selected').style.display = 'block';
+            document.getElementById('product-search').value = '';
+        }
+
+        function clearProductSelection() {
+            document.getElementById('item_id').value = '';
+            document.getElementById('product-search').value = '';
+            document.getElementById('product-selected').style.display = 'none';
+            document.getElementById('search-results').style.display = 'none';
+        }
+
+        document.addEventListener('click', e => {
+            const searchBox = document.getElementById('product-search');
+            const searchResults = document.getElementById('search-results');
+            if (!searchBox.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.style.display = 'none';
+            }
+        });
+
+        /* ---- File count & preview ---- */
+        function updateImageCount() {
+            const input = document.getElementById('product-images');
+            const count = input.files.length;
+            const countDiv = document.getElementById('images-count');
+            const previewGrid = document.getElementById('image-previews');
+
+            if (count > 0) {
+                const isEnough = count >= 4;
+                countDiv.innerHTML = `<span class="image-count-badge" style="${isEnough ? '' : 'background:#FEF9C3;color:#854D0E;border-color:#FDE047;'}">${count} gambar dipilih${isEnough ? '' : ' &mdash; tambahkan ' + (4 - count) + ' lagi'}</span>`;
+                countDiv.style.display = 'block';
+
+                // Thumbnail previews
+                previewGrid.innerHTML = '';
+                Array.from(input.files).slice(0, 8).forEach((f, i) => {
+                    const reader = new FileReader();
+                    reader.onload = e => {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:6px;border:1.5px solid var(--gray-100);';
+                        previewGrid.appendChild(img);
+                    };
+                    reader.readAsDataURL(f);
+                });
+                if (count > 8) {
+                    const more = document.createElement('div');
+                    more.style.cssText = 'width:72px;height:72px;border-radius:6px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:600;color:var(--gray-500);';
+                    more.textContent = `+${count - 8}`;
+                    previewGrid.appendChild(more);
+                }
+                previewGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;';
+            } else {
+                countDiv.style.display = 'none';
+                previewGrid.style.display = 'none';
+            }
+        }
+
+        /* ---- Form validation ---- */
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            const itemId = document.getElementById('item_id').value.trim();
+            if (!itemId) {
+                e.preventDefault();
+                alert('Pilih produk terlebih dahulu sebelum upload.');
+                return;
+            }
+            const imageInput = document.getElementById('product-images');
+            if (!imageInput.files || imageInput.files.length < 4) {
+                e.preventDefault();
+                alert(`Upload minimal 4 gambar. Saat ini baru ${imageInput.files ? imageInput.files.length : 0} gambar dipilih.`);
+                return;
+            }
+            const btn = document.getElementById('submitBtn');
+            btn.textContent = 'Mengupload...';
+            btn.disabled = true;
+        });
+    </script>
+
+    <style>
+        .image-previews-grid { display:flex; flex-wrap:wrap; gap:8px; }
+    </style>
+
+</body>
+</html>

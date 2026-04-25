@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Search — Home</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>Product<span>Search</span></h1>
+            </div>
+            <button class="nav-toggle" id="navToggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+            <ul class="nav-links" id="navLinks">
+                <li><a href="{{ url_for('index') }}" class="active">Home</a></li>
+                <li><a href="{{ url_for('upload') }}">Upload</a></li>
+                <li><a href="{{ url_for('search') }}">Search</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main>
+        <div class="container">
+
+            {% if error %}
+            <div class="alert alert-error">
+                <strong>Error:</strong> {{ error }}
+            </div>
+            {% endif %}
+
+            <section class="hero">
+                <h2>Temukan Produk Serupa<br><span>Dengan Gambar</span></h2>
+                <p>Upload foto produk dan temukan produk serupa secara instan menggunakan AI.</p>
+                <div class="hero-actions">
+                    <a href="{{ url_for('upload') }}" class="btn btn-primary">Upload Gambar Produk</a>
+                    <a href="{{ url_for('search') }}" class="btn btn-outline">Cari Produk Serupa</a>
+                </div>
+            </section>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Total Item</h3>
+                        <p class="stat-value">{{ stats.total_items | default(0) }}</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Total Gambar</h3>
+                        <p class="stat-value">{{ stats.total_images | default(0) }}</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Embeddings</h3>
+                        <p class="stat-value">{{ stats.total_embeddings | default(0) }}</p>
+                    </div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-content">
+                        <h3>Storage</h3>
+                        <p class="stat-value">{{ stats.storage_mb | default(0) }}<small style="font-size:0.9rem;font-weight:500;color:var(--gray-500)"> MB</small></p>
+                    </div>
+                </div>
+            </div>
+
+            <section class="features">
+                <h2>Fitur Utama</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <h3>Upload Gambar</h3>
+                        <p>Upload minimal 4 gambar produk dari berbagai sudut pandang untuk hasil pencarian yang akurat.</p>
+                        <a href="{{ url_for('upload') }}" class="btn btn-outline">Mulai Upload</a>
+                    </div>
+
+                    <div class="feature-card">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <h3>Cari Produk Serupa</h3>
+                        <p>Upload satu gambar dan temukan produk yang paling mirip dari database dalam hitungan detik.</p>
+                        <a href="{{ url_for('search') }}" class="btn btn-outline">Mulai Cari</a>
+                    </div>
+
+                    <div class="feature-card">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                        <h3>Cepat & Akurat</h3>
+                        <p>Didukung teknologi FAISS untuk pencarian vektor yang sangat cepat dengan akurasi tinggi.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="quick-start">
+                <h2>Cara Menggunakan</h2>
+                <ol class="steps">
+                    <li><div><strong>Upload Gambar:</strong> Buka halaman <a href="{{ url_for('upload') }}">Upload</a> dan pilih produk dari Inventree, lalu upload minimal 4 foto produk.</div></li>
+                    <li><div><strong>Proses Otomatis:</strong> Sistem akan memproses gambar dan menghasilkan data embedding secara otomatis.</div></li>
+                    <li><div><strong>Cari Produk:</strong> Buka halaman <a href="{{ url_for('search') }}">Search</a> dan upload gambar yang ingin dicari padanannya.</div></li>
+                    <li><div><strong>Lihat Hasil:</strong> Produk serupa akan ditampilkan dengan persentase kemiripan dari yang tertinggi.</div></li>
+                </ol>
+            </section>
+
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Image-Based Product Search &mdash; Powered by Flask + FAISS</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        const toggle = document.getElementById('navToggle');
+        const links  = document.getElementById('navLinks');
+        toggle.addEventListener('click', () => links.classList.toggle('open'));
+        document.addEventListener('click', e => {
+            if (!toggle.contains(e.target) && !links.contains(e.target)) links.classList.remove('open');
+        });
+    </script>
+</body>
+</html>

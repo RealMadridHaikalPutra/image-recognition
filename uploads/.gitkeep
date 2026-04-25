@@ -1,0 +1,7 @@
+# Uploaded images are stored here
+# Directory structure: uploads/{item_id}/{angle}.jpg
+#
+# Examples:
+#   uploads/PROD-001/front.jpg
+#   uploads/PROD-001/back.jpg
+#   uploads/PROD-002/front.jpg

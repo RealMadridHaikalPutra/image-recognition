@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>Product Search</h1>
+            </div>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                <li><a href="{{ url_for('upload') }}">Upload</a></li>
+                <li><a href="{{ url_for('search') }}">Search</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="error-container">
+            <div class="error-icon">Error</div>
+            <h2>Error {{ status_code }}</h2>
+            <p>{{ error }}</p>
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Go Home</a>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Image-Based Product Search | Powered by Flask + FAISS</p>
+    </footer>
+</body>
+</html>

@@ -29,7 +29,65 @@ class InventreeAPIService:
         self.session = requests.Session()
         self.session.auth = self.auth
         self.session.verify = False  # For self-signed certificates
+    
+    def fix_next_url(self, url: str) -> str:
+        """Fix incorrect next URL from Inventree pagination"""
+        if not url:
+            return None
         
+        # paksa pakai base_url kamu
+        if url.startswith('http://') or url.startswith('https://'):
+            from urllib.parse import urlparse
+            
+            parsed = urlparse(url)
+            path = parsed.path
+            query = parsed.query
+            
+            fixed_url = f"{self.base_url}{path}"
+            if query:
+                fixed_url += f"?{query}"
+            
+            return fixed_url
+    
+        return url
+        
+    def get_all_parts(self, limit: int = 100):
+        try:
+            url = f"{self.base_url}/api/part/"
+            params = {
+                'limit': 50,  # per page (optimal)
+                'active': True
+            }
+
+            all_parts = []
+
+            while url:
+                response = self.session.get(url, params=params, timeout=1000)
+                response.raise_for_status()
+
+                data = response.json()
+
+                if isinstance(data, dict):
+                    parts = data.get('results', [])
+                    all_parts.extend(parts)
+
+                    # 🔥 STOP kalau sudah cukup
+                    if len(all_parts) >= limit:
+                        all_parts = all_parts[:limit]
+                        break
+
+                    next_url = data.get('next')
+                    url = self.fix_next_url(next_url)
+                    params = {}
+
+                else:
+                    break
+
+            logger.info(f"✓ Total fetched parts: {len(all_parts)}")
+            return True, all_parts, None
+
+        except Exception as e:
+            return False, [], str(e)
     def get_parts(self, limit: int = 1000) -> Tuple[bool, List[Dict], Optional[str]]:
         """
         Fetch all parts/products from Inventree

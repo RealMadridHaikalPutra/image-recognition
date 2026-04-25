@@ -11,6 +11,7 @@ from datetime import datetime
 # Import configurations and services
 import config
 from models.db import db
+from pathlib import Path
 
 # Use advanced embedding and search services (NEW)
 from services.advanced_embedding import AdvancedEmbeddingService
@@ -87,109 +88,117 @@ def index():
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
-    """Upload product images (all 6 angles) endpoint"""
-    
+    """Upload product images — supports add & re-embed modes."""
+ 
     if request.method == 'GET':
-        # Get products from Inventree
-        products = []
-        error_msg = None
-        
-        if inventree_service:
-            success, parts, error = inventree_service.get_parts()
-            if success:
-                products = inventree_service.format_parts_for_dropdown(parts)
-            else:
-                error_msg = f"Could not load products: {error}"
-                logger.warning(error_msg)
-        else:
-            error_msg = "Inventree service not available"
-            logger.warning(error_msg)
-        
-        # Show upload form
-        return render_template('upload.html', 
-                             error=error_msg)
-    
-    # POST request - handle multi-file upload (all 6 angles)
-    try:
-        item_id = request.form.get('item_id', '').strip()
-        
-        # Validate item_id
-        if not item_id:
-            return render_template('upload.html', 
-                                 error='Product ID is required')
-        
-        # Collect uploaded images from single input field with multiple attribute
-        uploaded_files = []
-        if 'product-images' in request.files:
-            files = request.files.getlist('product-images')
-            for file in files:
-                if file and file.filename != '':
-                    # Check file extension
-                    if not allowed_file(file.filename):
-                        return render_template('upload.html', 
-                                             error=f'Invalid file type: {file.filename}')
-                    uploaded_files.append(file)
-        
-        # Validate minimum 4 images
-        if len(uploaded_files) < 4:
-            return render_template('upload.html',
-                                 error=f'Minimum 4 images required (you provided {len(uploaded_files)})')
-        
-        # Process all uploaded images
-        uploaded_count = 0
-        for idx, file in enumerate(uploaded_files, 1):
-            try:
-                # Use id_1, id_2, id_3, etc naming
-                angle = f'id_{idx}'
-                
-                # Save image file
-                save_result = storage_service.save_image(file, item_id, angle)
-                file_path = save_result['full_path']
-                relative_path = save_result['file_path']
-                
-                logger.info(f"📸 Uploading image: {item_id}/{angle}")
-                
-                # Insert metadata into database
-                image_id = db.insert_image(item_id, relative_path, angle)
-                logger.info(f"✓ Saved to DB: image_id={image_id}, name={angle}")
-                
-                # Generate advanced embedding
-                embedding_vector = AdvancedEmbeddingService.generate_embedding(file_path)
-                if embedding_vector is None:
-                    raise ValueError(f"Failed to generate embedding for {angle}")
-                logger.info(f"✓ Generated embedding for {angle}: shape={embedding_vector.shape}")
-                
-                # Add to FAISS index
-                faiss_index = faiss_service.add_vector(embedding_vector)
-                logger.info(f"✓ Added to FAISS: index={faiss_index}, angle={angle}")
-                
-                # Insert embedding record
-                db.insert_embedding(image_id, item_id, faiss_index)
-                logger.info(f"✓ Saved embedding metadata to DB for {angle}")
-                
-                uploaded_count += 1
-                
-            except Exception as e:
-                logger.error(f"✗ Error uploading {angle}: {e}")
-                raise
-        
-        # Save FAISS index to disk
-        faiss_service.save_index()
-        logger.info(f"✓ Saved FAISS index to disk")
-        
-        message = f"Successfully uploaded {uploaded_count} images for product {item_id}!"
-        
+        return render_template('upload.html')
+ 
+    # ── Ambil data form ───────────────────────────────────────────────────────
+    item_id     = request.form.get('item_id', '').strip()
+    upload_mode = request.form.get('upload_mode', 'new')   # new | add | re_embed
+ 
+    if not item_id:
+        return render_template('upload.html', error='Product ID wajib diisi')
+ 
+    # ── Cek apakah produk sudah ada di DB ─────────────────────────────────────
+    existing_images = db.get_item_details(item_id)
+    is_existing     = len(existing_images) > 0
+    min_required    = 1 if is_existing else 4
+ 
+    # ── Kumpulkan file upload ─────────────────────────────────────────────────
+    uploaded_files = []
+    if 'product-images' in request.files:
+        for f in request.files.getlist('product-images'):
+            if f and f.filename:
+                if not allowed_file(f.filename):
+                    return render_template('upload.html',
+                                           error=f'Tipe file tidak diizinkan: {f.filename}')
+                uploaded_files.append(f)
+ 
+    if len(uploaded_files) < min_required:
         return render_template('upload.html',
-                             success=True,
-                             message=message)
-    
+                               error=f'Upload minimal {min_required} gambar '
+                                     f'(saat ini {len(uploaded_files)})')
+ 
+    try:
+        # ── Tentukan offset angle untuk gambar baru ───────────────────────────
+        next_angle_idx = len(existing_images) + 1   # id_1, id_2, ...
+ 
+        new_image_records = []   # (image_id, full_path)
+ 
+        for f in uploaded_files:
+            angle = f'id_{next_angle_idx}'
+ 
+            save_result   = storage_service.save_image(f, item_id, angle)
+            full_path     = save_result['full_path']
+            relative_path = save_result['file_path']
+ 
+            image_id = db.insert_image(item_id, relative_path, angle)
+            new_image_records.append((image_id, full_path))
+ 
+            logger.info(f"✓ Saved: {item_id}/{angle} (DB id={image_id})")
+            next_angle_idx += 1
+ 
+        # ── Mode: Re-embed semua gambar (lama + baru) ─────────────────────────
+        if upload_mode == 're_embed' and is_existing:
+            logger.info(f"🔄 Re-embed mode: {item_id}")
+ 
+            # Ambil SEMUA gambar produk dari DB (sudah include yang baru)
+            all_images = db.get_item_details(item_id)
+ 
+            valid_paths = []
+            for rec in all_images:
+                raw_path = rec.get('file_path', '')
+                p = Path(raw_path)
+                if not p.is_absolute():
+                    p = Path(config.BASE_DIR) / raw_path
+                if p.exists():
+                    valid_paths.append((rec['id'], str(p)))
+                else:
+                    logger.warning(f"⚠️  File tidak ditemukan: {p}")
+ 
+            for image_id, file_path in valid_paths:
+                emb = AdvancedEmbeddingService.generate_embedding(file_path)
+                if emb is None:
+                    logger.warning(f"⚠️  Embedding gagal: {file_path}")
+                    continue
+                faiss_idx = faiss_service.add_vector(emb)
+                db.insert_embedding(image_id, item_id, int(faiss_idx))
+                logger.info(f"✓ Re-embed: {Path(file_path).name} → FAISS[{faiss_idx}]")
+ 
+            faiss_service.save_index()
+ 
+            total_embedded = len(valid_paths)
+            msg = (f"Re-embed selesai: {len(uploaded_files)} gambar baru ditambahkan, "
+                   f"{total_embedded} gambar total di-embed ulang untuk produk {item_id}.")
+ 
+        # ── Mode: Tambah gambar baru saja ────────────────────────────────────
+        else:
+            for image_id, full_path in new_image_records:
+                emb = AdvancedEmbeddingService.generate_embedding(full_path)
+                if emb is None:
+                    raise ValueError(f'Embedding gagal untuk {Path(full_path).name}')
+                faiss_idx = faiss_service.add_vector(emb)
+                db.insert_embedding(image_id, item_id, int(faiss_idx))
+                logger.info(f"✓ Embed: {Path(full_path).name} → FAISS[{faiss_idx}]")
+ 
+            faiss_service.save_index()
+ 
+            if is_existing:
+                msg = (f"Berhasil menambahkan {len(uploaded_files)} gambar baru "
+                       f"untuk produk {item_id}. "
+                       f"Total gambar: {len(existing_images) + len(uploaded_files)}.")
+            else:
+                msg = (f"Berhasil mengupload {len(uploaded_files)} gambar "
+                       f"untuk produk baru {item_id}!")
+ 
+        return render_template('upload.html', success=True, message=msg)
+ 
     except Exception as e:
         logger.error(f"✗ Upload error: {e}")
         import traceback
         traceback.print_exc()
-        return render_template('upload.html',
-                             error=f'Upload failed: {str(e)}')
-
+        return render_template('upload.html', error=f'Upload gagal: {str(e)}')
 
 @app.route('/api/search-products', methods=['GET'])
 def api_search_products():

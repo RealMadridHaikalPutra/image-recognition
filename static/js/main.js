@@ -76,9 +76,9 @@ function setupFormValidation() {
     
     forms.forEach(form => {
         form.addEventListener('submit', function(e) {
-            // Validate file input
+            // Validate file input only when it's required
             const fileInput = form.querySelector('input[type="file"]');
-            if (fileInput && !fileInput.files.length) {
+            if (fileInput && fileInput.required && !fileInput.files.length) {
                 e.preventDefault();
                 alert('Please select an image file');
                 return false;

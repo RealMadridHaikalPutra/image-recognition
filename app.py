@@ -194,10 +194,22 @@ def upload():
                                      f'(saat ini {len(uploaded_files)})')
 
     # For existing: must have at least some images remaining after delete
+    # Validasi untuk existing product (FIX: boleh hanya hapus tanpa upload baru)
     remaining_after_delete = len(existing_images) - len(delete_ids)
-    if is_existing and remaining_after_delete <= 0 and len(uploaded_files) == 0:
-        return render_template('upload.html',
-                               error='Tidak bisa menghapus semua gambar tanpa mengupload gambar baru.')
+    # Validasi untuk existing product (FINAL CLEAN)
+    if is_existing:
+        # ❗ Tidak boleh sampai 0 gambar TANPA upload baru
+        if remaining_after_delete <= 0 and len(uploaded_files) == 0:
+            return render_template(
+                'upload.html',
+                error='Tidak bisa menghapus semua gambar tanpa mengupload gambar baru.'
+            )
+
+    # ✅ Tidak ada validasi "harus ada perubahan"
+    # Jadi:
+    # - delete saja → boleh
+    # - upload saja → boleh
+    # - tidak ada aksi → juga boleh
 
     try:
         # ── Step 1: Delete marked images ──────────────────────────────────────
@@ -258,9 +270,13 @@ def upload():
 
             faiss_service.save_index()
             total_embedded = len(valid_paths)
-            deleted_info = f", {len(delete_ids)} gambar dihapus" if delete_ids else ""
-            msg = (f"Re-embed selesai: {len(uploaded_files)} gambar baru ditambahkan"
-                   f"{deleted_info}, {total_embedded} gambar total di-embed ulang untuk produk {item_id}.")
+            _parts = []
+            if len(uploaded_files) > 0:
+                _parts.append(f"{len(uploaded_files)} gambar baru ditambahkan")
+            if delete_ids:
+                _parts.append(f"{len(delete_ids)} gambar dihapus")
+            _parts.append(f"{total_embedded} gambar total di-embed ulang")
+            msg = f"Selesai untuk produk {item_id}: " + ", ".join(_parts) + "."
 
         # ── New product: embed only new files ─────────────────────────────────
         else:
@@ -487,8 +503,10 @@ def api_item_details(item_id):
     """API: Get details for specific item"""
     try:
         images = db.get_item_details(item_id)
-        if not images:
+        if images is None:
             return error_response(f"Item not found: {item_id}", 404)
+
+        # Kalau kosong, tetap return sukses
         data = format_item_details(item_id, images)
         return success_response(data)
     except Exception as e:

@@ -49,7 +49,7 @@
             gap: 10px;
         }
 
-        /* ── Real thumbnail with delete ── */
+        /* ── Thumbnail with delete ── */
         .existing-thumb {
             position: relative;
             width: 88px;
@@ -59,6 +59,7 @@
             border: 1.5px solid #FDE68A;
             background: #FEF3C7;
             flex-shrink: 0;
+            transition: opacity 0.2s, border 0.2s;
         }
         .existing-thumb img {
             width: 100%;
@@ -75,7 +76,6 @@
             align-items: center;
             justify-content: center;
             gap: 4px;
-            border-radius: calc(var(--radius-md) - 1px);
         }
         .existing-thumb .thumb-label {
             font-size: 0.6rem;
@@ -84,6 +84,10 @@
             font-weight: 600;
             text-align: center;
             padding: 0 2px;
+        }
+        .existing-thumb.marked-delete {
+            opacity: 0.45;
+            border: 1.5px dashed #EF4444;
         }
         .btn-delete-img {
             position: absolute;
@@ -107,7 +111,7 @@
             z-index: 5;
         }
         .btn-delete-img:hover { transform: scale(1.15); background: #b91c1c; }
-        .existing-thumb.deleting { opacity: 0.4; pointer-events: none; }
+        .existing-thumb.marked-delete .btn-delete-img { background: #6B7280; }
 
         /* ── Product status ── */
         .product-status {
@@ -207,7 +211,7 @@
         }
         .upload-source-btn svg { flex-shrink: 0; }
 
-        /* ── Delete confirm toast ── */
+        /* ── Delete toast ── */
         .delete-toast {
             position: fixed;
             bottom: 24px;
@@ -227,7 +231,14 @@
         .delete-toast.show {
             transform: translateX(-50%) translateY(0);
             opacity: 1;
-            pointer-events: auto;
+        }
+
+        /* ── Search input locked ── */
+        #product-search.locked {
+            background: var(--gray-50);
+            color: var(--gray-500);
+            cursor: not-allowed;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -256,7 +267,7 @@
         </div>
     </div>
 
-    <!-- Delete confirm toast -->
+    <!-- Delete toast -->
     <div class="delete-toast" id="deleteToast"></div>
 
     <nav class="navbar">
@@ -294,18 +305,17 @@
                         <form action="{{ url_for('upload') }}" method="POST"
                               enctype="multipart/form-data" id="uploadForm">
 
-                            <input type="hidden" id="item_id" name="item_id" value="">
-                            <!-- always re-embed when existing product -->
-                            <input type="hidden" id="upload_mode" name="upload_mode" value="new">
-                            <!-- comma-separated image IDs to delete before embedding -->
+                            <input type="hidden" id="item_id"         name="item_id"         value="">
+                            <input type="hidden" id="upload_mode"      name="upload_mode"      value="new">
                             <input type="hidden" id="delete_image_ids" name="delete_image_ids" value="">
 
-                            <!-- Product Search -->
+                            <!-- ── Product Search ── -->
                             <div class="form-group" style="position:relative;">
                                 <label for="product-search">Produk <span class="required">*</span></label>
                                 <input type="text" id="product-search"
                                        placeholder="Ketik nama atau SKU produk..."
-                                       onkeyup="searchProducts()" autocomplete="off">
+                                       onkeyup="onSearchKeyup()"
+                                       autocomplete="off">
                                 <small>Ketik minimal 2 karakter untuk mencari dari Inventree</small>
 
                                 <div id="search-results" class="search-results" style="display:none;">
@@ -316,7 +326,7 @@
                                     <div class="selected-badge">
                                         <span id="selected-product-info"></span>
                                         <button type="button" class="btn-remove"
-                                                onclick="clearProductSelection()" aria-label="Hapus">
+                                                onclick="clearProductSelection()" aria-label="Ganti produk">
                                             <svg width="14" height="14" viewBox="0 0 24 24"
                                                  fill="none" stroke="currentColor" stroke-width="2.5">
                                                 <line x1="18" y1="6" x2="6" y2="18"/>
@@ -343,27 +353,26 @@
                                 </div>
                             </div>
 
-                            <!-- Existing images gallery with delete -->
+                            <!-- ── Existing images ── -->
                             <div class="existing-section" id="existingSection">
                                 <div class="existing-header">
                                     <h4>Gambar yang sudah ada</h4>
                                     <span class="existing-badge" id="existingBadge">0 gambar</span>
                                 </div>
                                 <p class="existing-notice">
-                                    Klik <strong>✕</strong> pada gambar untuk menghapusnya sebelum submit.
-                                    Penghapusan dilakukan bersamaan saat kamu klik <em>Upload &amp; Re-embed</em>.
+                                    Klik <strong>✕</strong> pada gambar untuk menandai hapus.
+                                    Penghapusan terjadi saat kamu klik <em>Simpan Perubahan</em>.
                                 </p>
                                 <div class="existing-grid" id="existingGrid"></div>
                             </div>
 
-                            <!-- File Upload -->
+                            <!-- ── File Upload ── -->
                             <div class="form-divider">
                                 <h3 id="uploadTitle">Upload Gambar</h3>
                                 <p id="uploadHint">Pilih minimal 4 gambar dari berbagai sudut</p>
                             </div>
 
-                            <!-- Camera / File source selector -->
-                            <div class="upload-source-row" id="uploadSourceRow">
+                            <div class="upload-source-row">
                                 <button type="button" class="upload-source-btn active" id="btnFile"
                                         onclick="setSource('file')">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -386,9 +395,11 @@
                             </div>
 
                             <div class="form-group">
-                                <label for="product-images">Gambar Produk <span class="required">*</span></label>
+                                <label for="product-images">
+                                    Gambar Produk
+                                    <span id="imageRequired" class="required">*</span>
+                                </label>
                                 <div class="file-input-wrapper">
-                                    <!-- Hidden actual input -->
                                     <input type="file" id="product-images" name="product-images"
                                            accept="image/jpeg,image/jpg,image/png,image/gif"
                                            multiple required onchange="updateImageCount()">
@@ -406,7 +417,8 @@
                                     </div>
                                 </div>
                                 <div id="images-count" class="images-count" style="display:none;"></div>
-                                <div id="image-previews" style="display:none;margin-top:12px;flex-wrap:wrap;gap:8px;"></div>
+                                <div id="image-previews"
+                                     style="display:none;margin-top:12px;flex-wrap:wrap;gap:8px;"></div>
                             </div>
 
                             <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
@@ -416,31 +428,35 @@
                     </div>
                 </div>
 
-                <!-- Sidebar -->
+                <!-- ── Sidebar ── -->
                 <div class="sidebar">
                     <div class="info-box">
                         <h3>Cara Kerja</h3>
                         <ol>
                             <li><strong>Cari produk</strong> dari Inventree</li>
                             <li><strong>Hapus gambar</strong> yang salah (jika perlu)</li>
-                            <li><strong>Upload gambar baru</strong> dari kamera atau file</li>
-                            <li>Klik submit — sistem <strong>re-embed semua gambar</strong> (sisa + baru)</li>
+                            <li><strong>Upload gambar baru</strong> — opsional jika hanya hapus</li>
+                            <li>Klik submit — sistem <strong>re-embed semua gambar</strong></li>
                         </ol>
                     </div>
 
                     <div class="info-box info-technical">
                         <h3>Tentang Re-Embedding</h3>
                         <ul>
-                            <li>Setiap kali ada perubahan gambar, <strong>semua gambar produk</strong> di-embed ulang bersama</li>
-                            <li>Gambar yang kamu hapus akan <strong>dihapus permanen</strong> dari database</li>
-                            <li>Kamera langsung tersedia untuk perangkat mobile</li>
+                            <li>Setiap perubahan gambar men-trigger re-embed semua gambar produk</li>
+                            <li>Gambar yang dihapus akan <strong>dihapus permanen</strong> dari database</li>
+                            <li>Upload baru <strong>opsional</strong> — bisa submit hanya untuk menghapus</li>
                         </ul>
                     </div>
 
                     <div class="info-box">
                         <h3>Import Massal</h3>
-                        <p style="font-size:0.875rem;color:var(--gray-500);margin-top:4px;">Untuk import banyak produk sekaligus dari Inventree:</p>
-                        <pre style="font-size:0.75rem;font-family:var(--font-mono);background:var(--gray-50);padding:10px 12px;border-radius:var(--radius-md);margin-top:8px;border:1px solid var(--gray-100);overflow:auto;line-height:1.6;">python import_inventree.py
+                        <p style="font-size:0.875rem;color:var(--gray-500);margin-top:4px;">
+                            Untuk import banyak produk sekaligus dari Inventree:
+                        </p>
+                        <pre style="font-size:0.75rem;font-family:var(--font-mono);background:var(--gray-50);
+                                    padding:10px 12px;border-radius:var(--radius-md);margin-top:8px;
+                                    border:1px solid var(--gray-100);overflow:auto;line-height:1.6;">python import_inventree.py
 
 # Opsi:
 --skip-existing
@@ -458,240 +474,374 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
-    /* ── Nav toggle ── */
-    const toggle = document.getElementById('navToggle');
-    const links  = document.getElementById('navLinks');
-    toggle.addEventListener('click', () => links.classList.toggle('open'));
-    document.addEventListener('click', e => {
-        if (!toggle.contains(e.target) && !links.contains(e.target)) links.classList.remove('open');
-    });
+    /* ════════════════════════════════════════════════════════════
+       NAV TOGGLE
+    ════════════════════════════════════════════════════════════ */
+    (function () {
+        const navToggle = document.getElementById('navToggle');
+        const navLinks  = document.getElementById('navLinks');
+        navToggle.addEventListener('click', () => navLinks.classList.toggle('open'));
+        document.addEventListener('click', e => {
+            if (!navToggle.contains(e.target) && !navLinks.contains(e.target)) {
+                navLinks.classList.remove('open');
+            }
+        });
+    })();
 
-    /* ═══════════════════════════════════════════════════════════
-       STATE
-    ═══════════════════════════════════════════════════════════ */
-    let isExistingProduct = false;
-    let searchTimeout;
-    // {id, angle, file_path, imageUrl} of existing images still to keep
-    let existingImages = [];
-    // Set of image IDs marked for deletion
-    let toDeleteIds = new Set();
+    /* ════════════════════════════════════════════════════════════
+       STATE — satu objek, tidak ada variabel global terpisah
+    ════════════════════════════════════════════════════════════ */
+    const state = {
+        productSelected : false,
+        isExisting      : false,
+        existingImages  : [],
+        deleteIds       : new Set()
+    };
 
-    /* ═══════════════════════════════════════════════════════════
-       PRODUCT SEARCH
-    ═══════════════════════════════════════════════════════════ */
-    function searchProducts() {
-        // If a product is already selected, do nothing — block any dropdown
-        if (document.getElementById('item_id').value) {
-            document.getElementById('search-results').style.display = 'none';
+    /* ════════════════════════════════════════════════════════════
+       SEARCH — FIX BUG 1
+    ════════════════════════════════════════════════════════════ */
+    let _searchTimer      = null;
+    let _searchController = null;
+
+    function onSearchKeyup() {
+        /* GUARD: produk sudah dipilih → tidak ada yang dilakukan */
+        if (state.productSelected) return;
+
+        const query = document.getElementById('product-search').value.trim();
+        clearTimeout(_searchTimer);
+
+        if (query.length < 2) {
+            hideDropdown();
             return;
         }
-        const query = document.getElementById('product-search').value.trim();
-        const box   = document.getElementById('search-results');
-        const list  = document.getElementById('results-list');
-        clearTimeout(searchTimeout);
-        if (query.length < 2) { box.style.display = 'none'; return; }
-        searchTimeout = setTimeout(() => {
-            fetch(`/api/search-products?q=${encodeURIComponent(query)}`)
-                .then(r => r.json())
-                .then(data => {
-                    list.innerHTML = '';
-                    if (data.success && data.products.length > 0) {
-                        data.products.forEach(p => {
-                            const d = document.createElement('div');
-                            d.className = 'result-item';
-                            d.innerHTML = `
-                                <div class="result-item-main">
-                                    <strong>${p.id}</strong> &ndash; ${p.name} &ndash; <strong>${p.sku}</strong>
-                                </div>
-                                <div class="result-item-sub">${p.category}${p.description ? ' &mdash; ' + p.description : ''}</div>`;
-                            d.onclick = () => selectProduct(p);
-                            list.appendChild(d);
-                        });
-                    } else {
-                        list.innerHTML = '<div class="no-results">Produk tidak ditemukan</div>';
-                    }
-                    box.style.display = 'block';
-                })
-                .catch(() => {
-                    list.innerHTML = '<div class="no-results">Gagal terhubung ke server</div>';
-                    box.style.display = 'block';
-                });
+
+        document.getElementById('results-list').innerHTML =
+            '<div class="no-results">Mencari...</div>';
+        document.getElementById('search-results').style.display = 'block';
+
+        _searchTimer = setTimeout(() => {
+            if (_searchController) _searchController.abort();
+            _searchController = new AbortController();
+
+            fetch('/api/search-products?q=' + encodeURIComponent(query), {
+                signal: _searchController.signal
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                /* Double-guard: produk dipilih saat fetch sedang berjalan */
+                if (state.productSelected) return;
+
+                var list = document.getElementById('results-list');
+                list.innerHTML = '';
+
+                if (data.success && data.products && data.products.length > 0) {
+                    data.products.forEach(function (p) {
+                        var d = document.createElement('div');
+                        d.className = 'result-item';
+                        d.innerHTML =
+                            '<div class="result-item-main">' +
+                                '<strong>' + escHtml(String(p.id)) + '</strong>' +
+                                ' &ndash; ' + escHtml(p.name) +
+                                ' &ndash; <strong>' + escHtml(p.sku || '') + '</strong>' +
+                            '</div>' +
+                            '<div class="result-item-sub">' +
+                                escHtml(p.category || '') +
+                                (p.description ? ' &mdash; ' + escHtml(p.description) : '') +
+                            '</div>';
+                        d.addEventListener('click', function () { selectProduct(p); });
+                        list.appendChild(d);
+                    });
+                } else {
+                    list.innerHTML = '<div class="no-results">Produk tidak ditemukan</div>';
+                }
+
+                document.getElementById('search-results').style.display = 'block';
+            })
+            .catch(function (err) {
+                if (err.name === 'AbortError') return;
+                if (state.productSelected) return;
+                document.getElementById('results-list').innerHTML =
+                    '<div class="no-results">Gagal terhubung ke server</div>';
+            });
         }, 300);
     }
 
+    /* ════════════════════════════════════════════════════════════
+       SELECT PRODUCT
+    ════════════════════════════════════════════════════════════ */
     function selectProduct(p) {
+        if (state.productSelected) return; /* anti double-click */
+
+        /* Set flag PERTAMA — menghentikan semua search activity */
+        state.productSelected = true;
+
+        /* Batalkan request pending */
+        if (_searchController) _searchController.abort();
+        clearTimeout(_searchTimer);
+
+        /* Kunci input search */
+        var inp = document.getElementById('product-search');
+        inp.value       = '';
+        inp.placeholder = 'Produk sudah dipilih — klik \u2715 untuk ganti';
+        inp.classList.add('locked');
+        inp.readOnly = true;
+
+        /* Tutup dropdown */
+        hideDropdown();
+
+        /* Simpan id ke hidden field */
         document.getElementById('item_id').value = p.id;
-        document.getElementById('search-results').style.display = 'none';
 
-        // Lock the search input so it can't trigger the dropdown again
-        const searchInput = document.getElementById('product-search');
-        searchInput.value = '';
-        searchInput.setAttribute('disabled', '');
-        searchInput.setAttribute('placeholder', 'Produk sudah dipilih');
-
-        document.getElementById('selected-product-info').innerHTML = `
-            <span class="badge-sku">${p.id}</span>
-            <span class="badge-name">${p.name}</span>
-            <span class="badge-sku">${p.sku}</span>`;
+        /* Tampilkan badge */
+        document.getElementById('selected-product-info').innerHTML =
+            '<span class="badge-sku">' + escHtml(String(p.id)) + '</span> ' +
+            '<span class="badge-name">' + escHtml(p.name) + '</span> ' +
+            '<span class="badge-sku">' + escHtml(p.sku || '') + '</span>';
         document.getElementById('product-selected').style.display = 'block';
+
         checkProductExists(p.id);
     }
 
-    function checkProductExists(itemId) {
-        fetch(`/api/item/${itemId}`)
-            .then(r => r.json())
-            .then(data => {
-                const exists = data.success && data.data && data.data.image_count > 0;
-                const count  = exists ? data.data.image_count : 0;
-                const imgs   = exists ? (data.data.images || []) : [];
-                isExistingProduct = exists;
-                existingImages = imgs.map(i => ({ ...i }));
-                toDeleteIds.clear();
-                updateUI(exists, count, imgs);
-            })
-            .catch(() => { isExistingProduct = false; updateUI(false, 0, []); });
+    /* ════════════════════════════════════════════════════════════
+       CLEAR PRODUCT
+    ════════════════════════════════════════════════════════════ */
+    function clearProductSelection() {
+        state.productSelected = false;
+        state.isExisting      = false;
+        state.existingImages  = [];
+        state.deleteIds.clear();
+
+        var inp = document.getElementById('product-search');
+        inp.value       = '';
+        inp.placeholder = 'Ketik nama atau SKU produk...';
+        inp.classList.remove('locked');
+        inp.readOnly = false;
+
+        document.getElementById('item_id').value          = '';
+        document.getElementById('upload_mode').value      = 'new';
+        document.getElementById('delete_image_ids').value = '';
+
+        document.getElementById('product-selected').style.display = 'none';
+        document.getElementById('results-list').innerHTML = '';
+        hideDropdown();
+
+        document.getElementById('productStatus').classList.remove('show');
+        document.getElementById('reEmbedTag').classList.remove('show');
+        document.getElementById('existingSection').classList.remove('show');
+
+        document.getElementById('uploadTitle').textContent = 'Upload Gambar';
+        document.getElementById('uploadHint').textContent  = 'Pilih minimal 4 gambar dari berbagai sudut';
+        document.getElementById('submitBtn').textContent   = 'Upload Gambar';
+
+        document.getElementById('product-images').setAttribute('required', '');
+        document.getElementById('imageRequired').style.display = '';
+        document.getElementById('product-images').value = '';
+        document.getElementById('images-count').style.display   = 'none';
+        document.getElementById('image-previews').style.display = 'none';
     }
 
-    function updateUI(exists, count, images) {
-        const statusEl = document.getElementById('productStatus');
-        const dotEl    = document.getElementById('statusDot');
-        const textEl   = document.getElementById('statusText');
-        statusEl.classList.add('show');
+    /* ════════════════════════════════════════════════════════════
+       DROPDOWN HELPER
+    ════════════════════════════════════════════════════════════ */
+    function hideDropdown() {
+        document.getElementById('search-results').style.display = 'none';
+    }
+
+    /* Klik di luar → tutup dropdown (hanya jika produk belum dipilih) */
+    document.addEventListener('click', function (e) {
+        if (state.productSelected) return;
+        var inp = document.getElementById('product-search');
+        var box = document.getElementById('search-results');
+        if (!inp.contains(e.target) && !box.contains(e.target)) {
+            hideDropdown();
+        }
+    });
+
+    /* ════════════════════════════════════════════════════════════
+       CHECK PRODUCT EXISTS
+    ════════════════════════════════════════════════════════════ */
+    function checkProductExists(itemId) {
+        fetch('/api/item/' + encodeURIComponent(itemId))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            var exists = data.success && data.data && data.data.image_count > 0;
+            state.isExisting     = exists;
+            state.existingImages = exists ? (data.data.images || []) : [];
+            state.deleteIds.clear();
+            renderUI();
+        })
+        .catch(function () {
+            state.isExisting     = false;
+            state.existingImages = [];
+            state.deleteIds.clear();
+            renderUI();
+        });
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       RENDER UI — FIX BUG 2
+       Existing product: upload baru OPSIONAL.
+       User boleh submit hanya untuk menghapus gambar.
+    ════════════════════════════════════════════════════════════ */
+    function renderUI() {
+        var exists = state.isExisting;
+        var count  = state.existingImages.length;
+
+        document.getElementById('productStatus').classList.add('show');
 
         if (exists) {
-            dotEl.className  = 'status-dot existing';
-            textEl.className = 'status-text existing';
-            textEl.textContent = `Produk sudah ada — ${count} gambar tersimpan`;
+            document.getElementById('statusDot').className  = 'status-dot existing';
+            document.getElementById('statusText').className = 'status-text existing';
+            document.getElementById('statusText').textContent =
+                'Produk sudah ada \u2014 ' + count + ' gambar tersimpan';
+
             document.getElementById('reEmbedTag').classList.add('show');
             document.getElementById('upload_mode').value = 're_embed';
-            renderExistingImages(images);
+
+            renderExistingImages(state.existingImages);
             document.getElementById('existingSection').classList.add('show');
+
             document.getElementById('uploadTitle').textContent = 'Tambah Gambar Baru (Opsional)';
-            document.getElementById('uploadHint').textContent =
-                `Upload gambar baru — akan digabung dengan sisa gambar lama, lalu di-embed ulang semua`;
-            document.getElementById('submitBtn').textContent = 'Upload & Re-embed';
+            document.getElementById('uploadHint').textContent  =
+                'Upload gambar baru jika ada \u2014 opsional, bisa submit hanya untuk hapus';
+
+            /* FIX BUG 2: tidak required untuk existing */
             document.getElementById('product-images').removeAttribute('required');
+            document.getElementById('imageRequired').style.display = 'none';
+
+            document.getElementById('submitBtn').textContent = 'Simpan Perubahan';
+
         } else {
-            dotEl.className  = 'status-dot new';
-            textEl.className = 'status-text new';
-            textEl.textContent = 'Produk baru — belum ada di database';
+            document.getElementById('statusDot').className  = 'status-dot new';
+            document.getElementById('statusText').className = 'status-text new';
+            document.getElementById('statusText').textContent =
+                'Produk baru \u2014 belum ada di database';
+
             document.getElementById('reEmbedTag').classList.remove('show');
             document.getElementById('upload_mode').value = 'new';
             document.getElementById('existingSection').classList.remove('show');
+
             document.getElementById('uploadTitle').textContent = 'Upload Gambar';
-            document.getElementById('uploadHint').textContent = 'Pilih minimal 4 gambar dari berbagai sudut';
-            document.getElementById('submitBtn').textContent = 'Upload Gambar';
+            document.getElementById('uploadHint').textContent  = 'Pilih minimal 4 gambar dari berbagai sudut';
+
             document.getElementById('product-images').setAttribute('required', '');
+            document.getElementById('imageRequired').style.display = '';
+
+            document.getElementById('submitBtn').textContent = 'Upload Gambar';
         }
 
-        document.getElementById('images-count').style.display = 'none';
+        document.getElementById('images-count').style.display   = 'none';
         document.getElementById('image-previews').style.display = 'none';
         syncDeleteField();
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       EXISTING IMAGE GALLERY WITH DELETE
-    ═══════════════════════════════════════════════════════════ */
+    /* ════════════════════════════════════════════════════════════
+       EXISTING IMAGE GALLERY
+    ════════════════════════════════════════════════════════════ */
     function renderExistingImages(images) {
-        const grid  = document.getElementById('existingGrid');
-        const badge = document.getElementById('existingBadge');
+        var grid = document.getElementById('existingGrid');
         grid.innerHTML = '';
-        const total = images.length;
-        badge.textContent = `${total} gambar`;
+        updateBadge();
 
-        images.forEach(img => {
-            const wrap = document.createElement('div');
-            wrap.className = 'existing-thumb';
-            wrap.dataset.id = img.id;
+        images.forEach(function (img) {
+            var wrap = document.createElement('div');
+            wrap.className       = 'existing-thumb';
+            wrap.dataset.imgId   = img.id;
 
-            // Build image element or placeholder
-            const label = (img.angle || '').replace('id_', '#');
-            const imgUrl = img.file_path
-                ? `/uploads-serve/${encodeURIComponent(img.file_path)}`
+            var label  = (img.angle || '').replace('id_', '#');
+            var imgUrl = img.file_path
+                ? '/uploads-serve/' + encodeURIComponent(img.file_path)
                 : null;
 
             if (imgUrl) {
-                const im = document.createElement('img');
-                im.src = imgUrl;
-                im.alt = label;
-                im.onerror = () => { im.replaceWith(makePlaceholder(label)); };
+                var im   = document.createElement('img');
+                im.src   = imgUrl;
+                im.alt   = label;
+                im.onerror = function () { im.replaceWith(makePlaceholder(label)); };
                 wrap.appendChild(im);
             } else {
                 wrap.appendChild(makePlaceholder(label));
             }
 
-            // Delete button
-            const del = document.createElement('button');
-            del.type = 'button';
-            del.className = 'btn-delete-img';
-            del.title = `Hapus ${label}`;
-            del.innerHTML = '✕';
-            del.addEventListener('click', () => toggleDeleteImage(img.id, wrap, label));
-            wrap.appendChild(del);
+            var btn       = document.createElement('button');
+            btn.type      = 'button';
+            btn.className = 'btn-delete-img';
+            btn.title     = 'Tandai hapus: ' + label;
+            btn.textContent = '\u2715';
+            (function (imgId, wrapEl, lbl) {
+                btn.addEventListener('click', function () {
+                    toggleDelete(imgId, wrapEl, lbl);
+                });
+            })(img.id, wrap, label);
+            wrap.appendChild(btn);
 
             grid.appendChild(wrap);
         });
     }
 
     function makePlaceholder(label) {
-        const div = document.createElement('div');
+        var div = document.createElement('div');
         div.className = 'thumb-placeholder';
-        div.innerHTML = `
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-                 stroke="#D97706" stroke-width="1.5">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <path d="M21 15l-5-5L5 21"/>
-            </svg>
-            <span class="thumb-label">${label}</span>`;
+        div.innerHTML =
+            '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"' +
+            '     stroke="#D97706" stroke-width="1.5">' +
+            '  <rect x="3" y="3" width="18" height="18" rx="2"/>' +
+            '  <circle cx="8.5" cy="8.5" r="1.5"/>' +
+            '  <path d="M21 15l-5-5L5 21"/>' +
+            '</svg>' +
+            '<span class="thumb-label">' + escHtml(label) + '</span>';
         return div;
     }
 
-    function toggleDeleteImage(imgId, wrap, label) {
-        if (toDeleteIds.has(imgId)) {
-            // Un-mark
-            toDeleteIds.delete(imgId);
-            wrap.style.opacity = '1';
-            wrap.style.border = '1.5px solid #FDE68A';
-            wrap.querySelector('.btn-delete-img').style.background = 'var(--red)';
-            showToast(`Batal hapus gambar ${label}`);
+    function toggleDelete(imgId, wrap, label) {
+        if (state.deleteIds.has(imgId)) {
+            state.deleteIds.delete(imgId);
+            wrap.classList.remove('marked-delete');
+            showToast('Batal hapus: ' + label);
         } else {
-            // Mark for delete
-            toDeleteIds.add(imgId);
-            wrap.style.opacity = '0.45';
-            wrap.style.border = '1.5px dashed #EF4444';
-            wrap.querySelector('.btn-delete-img').style.background = '#6B7280';
-            showToast(`Gambar ${label} akan dihapus saat submit`);
+            state.deleteIds.add(imgId);
+            wrap.classList.add('marked-delete');
+            showToast('Akan dihapus saat submit: ' + label);
         }
         syncDeleteField();
-        syncExistingBadge();
+        updateBadge();
     }
 
     function syncDeleteField() {
-        document.getElementById('delete_image_ids').value = [...toDeleteIds].join(',');
+        document.getElementById('delete_image_ids').value =
+            Array.from(state.deleteIds).join(',');
     }
 
-    function syncExistingBadge() {
-        const remaining = existingImages.length - toDeleteIds.size;
-        document.getElementById('existingBadge').textContent = `${existingImages.length} gambar (${toDeleteIds.size} akan dihapus)`;
+    function updateBadge() {
+        var total  = state.existingImages.length;
+        var marked = state.deleteIds.size;
+        document.getElementById('existingBadge').textContent =
+            marked > 0
+                ? total + ' gambar (' + marked + ' akan dihapus)'
+                : total + ' gambar';
     }
 
+    /* ════════════════════════════════════════════════════════════
+       TOAST
+    ════════════════════════════════════════════════════════════ */
+    var _toastTimer = null;
     function showToast(msg) {
-        const t = document.getElementById('deleteToast');
+        var t = document.getElementById('deleteToast');
         t.textContent = msg;
         t.classList.add('show');
-        clearTimeout(t._timer);
-        t._timer = setTimeout(() => t.classList.remove('show'), 2500);
+        clearTimeout(_toastTimer);
+        _toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2500);
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       CAMERA / FILE SOURCE TOGGLE
-    ═══════════════════════════════════════════════════════════ */
+    /* ════════════════════════════════════════════════════════════
+       CAMERA / FILE SOURCE
+    ════════════════════════════════════════════════════════════ */
     function setSource(type) {
-        const input = document.getElementById('product-images');
-        const btnFile   = document.getElementById('btnFile');
-        const btnCamera = document.getElementById('btnCamera');
-        const labelText = document.getElementById('fileLabelText');
+        var input     = document.getElementById('product-images');
+        var btnFile   = document.getElementById('btnFile');
+        var btnCamera = document.getElementById('btnCamera');
+        var labelText = document.getElementById('fileLabelText');
 
         if (type === 'camera') {
             input.removeAttribute('multiple');
@@ -708,93 +858,71 @@
             btnCamera.classList.remove('active');
             labelText.textContent = 'Klik untuk memilih gambar';
         }
-        // Reset file
         input.value = '';
-        document.getElementById('images-count').style.display = 'none';
+        document.getElementById('images-count').style.display   = 'none';
         document.getElementById('image-previews').style.display = 'none';
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       CLEAR PRODUCT SELECTION
-    ═══════════════════════════════════════════════════════════ */
-    function clearProductSelection() {
-        document.getElementById('item_id').value = '';
-        document.getElementById('product-search').value = '';
-        document.getElementById('product-selected').style.display = 'none';
-        document.getElementById('search-results').style.display = 'none';
-        document.getElementById('productStatus').classList.remove('show');
-        document.getElementById('reEmbedTag').classList.remove('show');
-        document.getElementById('existingSection').classList.remove('show');
-        document.getElementById('uploadTitle').textContent = 'Upload Gambar';
-        document.getElementById('uploadHint').textContent = 'Pilih minimal 4 gambar dari berbagai sudut';
-        document.getElementById('product-images').setAttribute('required', '');
-        document.getElementById('images-count').style.display = 'none';
-        document.getElementById('image-previews').style.display = 'none';
-        document.getElementById('submitBtn').textContent = 'Upload Gambar';
-        document.getElementById('upload_mode').value = 'new';
-        document.getElementById('delete_image_ids').value = '';
-        isExistingProduct = false;
-        existingImages = [];
-        toDeleteIds.clear();
-    }
-
-    /* Click outside search closes dropdown */
-    document.addEventListener('click', e => {
-        const b = document.getElementById('product-search');
-        const r = document.getElementById('search-results');
-        if (!b.contains(e.target) && !r.contains(e.target)) r.style.display = 'none';
-    });
-
-    /* ═══════════════════════════════════════════════════════════
+    /* ════════════════════════════════════════════════════════════
        FILE PREVIEW
-    ═══════════════════════════════════════════════════════════ */
+    ════════════════════════════════════════════════════════════ */
     function updateImageCount() {
-        const input    = document.getElementById('product-images');
-        const count    = input.files.length;
-        const countDiv = document.getElementById('images-count');
-        const preview  = document.getElementById('image-previews');
-        const minReq   = isExistingProduct ? 0 : 4;
+        var input    = document.getElementById('product-images');
+        var count    = input.files.length;
+        var countDiv = document.getElementById('images-count');
+        var preview  = document.getElementById('image-previews');
+        var minReq   = state.isExisting ? 0 : 4;
 
-        if (count > 0) {
-            const ok  = isExistingProduct || count >= minReq;
-            const msg = ok
-                ? `${count} gambar dipilih`
-                : `${count} gambar — tambahkan ${minReq - count} lagi`;
-            countDiv.innerHTML = `<span class="image-count-badge"
-                style="${ok ? '' : 'background:#FEF9C3;color:#854D0E;border-color:#FDE047;'}">${msg}</span>`;
-            countDiv.style.display = 'block';
+        if (count === 0) {
+            countDiv.style.display  = 'none';
+            preview.style.display   = 'none';
+            return;
+        }
 
-            preview.innerHTML = '';
-            preview.style.display = 'flex';
-            Array.from(input.files).slice(0, 8).forEach(f => {
-                const reader = new FileReader();
-                reader.onload = ev => {
-                    const img = document.createElement('img');
-                    img.src = ev.target.result;
-                    img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:6px;border:1.5px solid var(--gray-100);';
-                    preview.appendChild(img);
-                };
-                reader.readAsDataURL(f);
-            });
-            if (count > 8) {
-                const more = document.createElement('div');
-                more.style.cssText = 'width:72px;height:72px;border-radius:6px;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:var(--gray-500);';
-                more.textContent = `+${count - 8}`;
-                preview.appendChild(more);
-            }
-        } else {
-            countDiv.style.display = 'none';
-            preview.style.display  = 'none';
+        var ok  = state.isExisting || count >= minReq;
+        var msg = ok
+            ? count + ' gambar dipilih'
+            : count + ' gambar \u2014 tambahkan ' + (minReq - count) + ' lagi';
+
+        countDiv.innerHTML =
+            '<span class="image-count-badge" style="' +
+            (ok ? '' : 'background:#FEF9C3;color:#854D0E;border-color:#FDE047;') +
+            '">' + msg + '</span>';
+        countDiv.style.display = 'block';
+
+        preview.innerHTML     = '';
+        preview.style.display = 'flex';
+
+        Array.from(input.files).slice(0, 8).forEach(function (f) {
+            var reader  = new FileReader();
+            reader.onload = function (ev) {
+                var img = document.createElement('img');
+                img.src = ev.target.result;
+                img.style.cssText =
+                    'width:72px;height:72px;object-fit:cover;border-radius:6px;' +
+                    'border:1.5px solid var(--gray-100);';
+                preview.appendChild(img);
+            };
+            reader.readAsDataURL(f);
+        });
+
+        if (count > 8) {
+            var more = document.createElement('div');
+            more.style.cssText =
+                'width:72px;height:72px;border-radius:6px;background:var(--gray-100);' +
+                'display:flex;align-items:center;justify-content:center;' +
+                'font-size:0.8rem;font-weight:700;color:var(--gray-500);';
+            more.textContent = '+' + (count - 8);
+            preview.appendChild(more);
         }
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       FORM SUBMIT
-    ═══════════════════════════════════════════════════════════ */
-    document.getElementById('uploadForm').addEventListener('submit', function(e) {
-        const itemId  = document.getElementById('item_id').value.trim();
-        const count   = document.getElementById('product-images').files.length;
-        const minReq  = isExistingProduct ? 0 : 4;
+    /* ════════════════════════════════════════════════════════════
+       FORM SUBMIT — FIX BUG 2
+    ════════════════════════════════════════════════════════════ */
+    document.getElementById('uploadForm').addEventListener('submit', function (e) {
+        var itemId      = document.getElementById('item_id').value.trim();
+        var uploadCount = document.getElementById('product-images').files.length;
 
         if (!itemId) {
             e.preventDefault();
@@ -802,30 +930,69 @@
             return;
         }
 
-        // For new product still need min 4
-        if (!isExistingProduct && count < minReq) {
-            e.preventDefault();
-            alert(`Upload minimal ${minReq} gambar. Saat ini ${count} gambar dipilih.`);
-            return;
+        if (!state.isExisting) {
+            /* Produk BARU: wajib minimal 4 gambar */
+            if (uploadCount < 4) {
+                e.preventDefault();
+                alert('Upload minimal 4 gambar untuk produk baru. Saat ini ' + uploadCount + ' gambar dipilih.');
+                return;
+            }
+        } else {
+            /* Produk EXISTING */
+            var remaining = state.existingImages.length - state.deleteIds.size;
+            var total     = remaining + uploadCount;
+
+            /* Tidak boleh sampai 0 gambar */
+            if (total <= 0) {
+                e.preventDefault();
+                alert('Tidak bisa menghapus semua gambar tanpa mengupload minimal 1 gambar baru.');
+                return;
+            }
+
+            /* Tidak ada perubahan sama sekali */
+            if (state.deleteIds.size === 0 && uploadCount === 0) {
+                e.preventDefault();
+                alert('Belum ada perubahan. Hapus gambar atau upload gambar baru terlebih dahulu.');
+                return;
+            }
+
+            /* Hanya hapus (tanpa upload baru) = VALID — tidak ada blokir di sini */
         }
 
-        // For existing: need at least new images OR some remaining
-        const remainingExisting = existingImages.length - toDeleteIds.size;
-        if (isExistingProduct && count === 0 && remainingExisting === 0) {
-            e.preventDefault();
-            alert('Tidak bisa menghapus semua gambar tanpa mengupload gambar baru.');
-            return;
+        /* Progress overlay */
+        document.getElementById('progressOverlay').classList.add('show');
+
+        if (state.isExisting) {
+            var hasDelete = state.deleteIds.size > 0;
+            var hasUpload = uploadCount > 0;
+            var title;
+            if (hasDelete && hasUpload) {
+                title = 'Hapus & Upload & Re-embed...';
+            } else if (hasDelete) {
+                title = 'Menghapus & Re-embed...';
+            } else {
+                title = 'Upload & Re-embed...';
+            }
+            document.getElementById('progressTitle').textContent    = title;
+            document.getElementById('progressSubtitle').textContent = 'Semua gambar produk sedang diproses';
+        } else {
+            document.getElementById('progressTitle').textContent    = 'Memproses Gambar Baru...';
+            document.getElementById('progressSubtitle').textContent = 'Mohon tunggu, jangan tutup halaman ini';
         }
 
-        const overlay = document.getElementById('progressOverlay');
-        overlay.classList.add('show');
-        document.getElementById('progressTitle').textContent = isExistingProduct
-            ? 'Re-embedding & Update...' : 'Memproses Gambar Baru...';
-        document.getElementById('progressSubtitle').textContent = isExistingProduct
-            ? 'Semua gambar produk sedang di-embed ulang'
-            : 'Mohon tunggu, jangan tutup halaman ini';
         document.getElementById('submitBtn').disabled = true;
     });
+
+    /* ════════════════════════════════════════════════════════════
+       UTILITY
+    ════════════════════════════════════════════════════════════ */
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
     </script>
 </body>
 </html>
